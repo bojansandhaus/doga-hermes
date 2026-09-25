@@ -2,7 +2,6 @@
 
 [![MIT License](https://img.shields.io/github/license/bojansandhaus/doga-hermes)](https://github.com/bojansandhaus/doga-hermes/blob/main/LICENSE)
 [![Python 3.10 | 3.11 | 3.12](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://github.com/bojansandhaus/doga-hermes)
-[![CI](https://img.shields.io/github/actions/workflow/status/bojansandhaus/doga-hermes/test.yml)](https://github.com/bojansandhaus/doga-hermes/actions)
 [![Last Commit](https://img.shields.io/github/last-commit/bojansandhaus/doga-hermes)](https://github.com/bojansandhaus/doga-hermes)
 
 ![DOGA](assets/DOGA.png)
