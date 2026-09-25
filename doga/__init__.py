@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import threading
 from typing import Any, Dict, Optional
@@ -58,8 +57,8 @@ class _PluginState:
         self.show_simulation: bool = True
         self.max_scenarios: int = 5
         self.memory_enabled: bool = True
-        self.jev_enabled: bool = False
-        self._last_jev_status: str = "disabled"
+        self.jev_enabled: bool = True
+        self._last_jev_status: str = "enabled"
         self.de_bono_enabled: bool = True
         self.max_recursion: int = 3
         self._local = threading.local()
@@ -484,7 +483,7 @@ Subcommands:
   hide                 Hide simulation panel (only final answer)
   memory on           Enable Mnemosyne goal memory (requires pip install mnemosyne-memory)
   memory off          Disable Mnemosyne goal memory
-  jev on              Enable Jev response contracts (OpenRouter, TypeSafe fallback)
+  jev on              Enable Jev response contracts (default on)
   jev off             Disable Jev response contracts
 
 Current state: {state}
@@ -592,10 +591,8 @@ def _handle_doga(raw_args: str) -> Optional[str]:
             return f"Jev: {'enabled' if _state.jev_enabled else 'disabled'}\nUsage: /doga jev on|off"
         setting = argv[1].lower()
         if setting == "on":
-            if not (os.environ.get("OPENROUTER_API_KEY") or os.environ.get("TYPESAFE_API_KEY")):
-                return "Jev requires OPENROUTER_API_KEY or TYPESAFE_API_KEY in the environment."
             _state.jev_enabled = True
-            _state._last_jev_status = "ready"
+            _state._last_jev_status = "enabled"
             return "DOGA Jev response contracts enabled."
         if setting == "off":
             _state.jev_enabled = False

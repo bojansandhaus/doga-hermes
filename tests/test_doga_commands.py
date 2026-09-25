@@ -12,7 +12,8 @@ def _reset_state():
     plugin._state.de_bono_enabled = True
     plugin._state.max_recursion = 3
     plugin._state.memory_enabled = True
-    plugin._state.jev_enabled = False
+    plugin._state.jev_enabled = True
+    plugin._state._last_jev_status = "enabled"
 
 
 def test_help():
@@ -172,13 +173,18 @@ def test_status_with_memory_disabled():
     assert "Memory: False" in result
 
 
-def test_jev_on_requires_api_key(monkeypatch):
+def test_jev_is_enabled_by_default():
+    state = plugin._PluginState()
+    assert state.jev_enabled is True
+
+
+def test_jev_on_without_api_key_enables(monkeypatch):
     monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    plugin._state.jev_enabled = False
     result = plugin._handle_doga("jev on")
-    assert "OPENROUTER_API_KEY" in result
-    assert "TYPESAFE_API_KEY" in result
-    assert plugin._state.jev_enabled is False
+    assert result is not None and "enabled" in result
+    assert plugin._state.jev_enabled is True
 
 
 def test_jev_on_and_off(monkeypatch):
@@ -191,4 +197,5 @@ def test_jev_on_and_off(monkeypatch):
 
 
 def test_status_includes_jev():
-    assert "Jev: disabled" in plugin._handle_doga("status")
+    result = plugin._handle_doga("status")
+    assert result is not None and "Jev: enabled" in result

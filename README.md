@@ -4,7 +4,6 @@
 [![Python 3.10 | 3.11 | 3.12](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://github.com/bojansandhaus/doga-hermes)
 [![CI](https://img.shields.io/github/actions/workflow/status/bojansandhaus/doga-hermes/test.yml)](https://github.com/bojansandhaus/doga-hermes/actions)
 [![Last Commit](https://img.shields.io/github/last-commit/bojansandhaus/doga-hermes)](https://github.com/bojansandhaus/doga-hermes)
-[![Release](https://img.shields.io/github/v/release/bojansandhaus/doga-hermes)](https://github.com/bojansandhaus/doga-hermes/releases)
 
 ![DOGA](assets/DOGA.png)
 
@@ -19,7 +18,7 @@ DOGA (Doğa, Turkish for “nature”) adds scenario simulation, Monte Carlo rea
 ## Features
 
 - **Goal Detection**  Identifies whether the user needs Information, Understanding, or Action before responding
-- **Jev Response Contract**  Optional typed assessment of the user's goal, response mode, stakes, need for clarification, and scenario analysis. DOGA turns it into concrete answer requirements for the main model. OpenRouter is primary, with direct TypeSafe as fallback.
+- **Jev Response Contract**  Enabled by default. Jev classifies the user's goal, response mode, stakes, need for clarification, and scenario analysis. DOGA turns that assessment into answer requirements for the main model. OpenRouter is primary, with direct TypeSafe as fallback.
 - **Scenario Generation**  Prompts the LLM to enumerate and weigh multiple interpretations
 - **Monte Carlo Simulation**  Pure Python engine (10,000 to 50,000 iterations) for quantitative probability analysis, using 0 LLM tokens
 - **Thinking Panel**  `<world_model>` reasoning blocks are extracted and displayed as a structured `[DOGA: Thinking Process]` panel before the final response
@@ -48,13 +47,13 @@ pip install doga-hermes[memory]
 
 No configuration changes are needed. DOGA detects Mnemosyne at runtime.
 
-### Optional Jev setup
+### Jev setup
 
-Jev response contracts are off by default. To enable them, make `OPENROUTER_API_KEY` available to the Hermes process. For failover, also provide `TYPESAFE_API_KEY`. Then use `/doga jev on`. DOGA reads both keys from the process environment. It does not store keys in DOGA configuration or include them in model prompts.
+Jev response contracts are on by default. For live Jev assessments, make `OPENROUTER_API_KEY` available to the Hermes process. To enable TypeSafe failover, also provide `TYPESAFE_API_KEY`. DOGA reads keys from the process environment, not DOGA configuration or model prompts. Without either key, the Jev request cannot be evaluated and DOGA continues with its standard guidance.
 
 DOGA sends the user's request to Jev through OpenRouter first, using model `typesafe/jev-1.13` at `https://openrouter.ai/api/alpha/decisions`. If that key is missing or the request fails, DOGA tries TypeSafe directly, using model `jev-latest` at `https://api.typesafe.ai/v1/systemone`. If only `TYPESAFE_API_KEY` is set, DOGA uses the direct TypeSafe route. If both calls fail, DOGA continues with its standard guidance. `JEV_PROVIDER_MODE` configures the separate `jev-decisions` Hermes plugin and does not control DOGA's provider route.
 
-Then enable it in `~/.hermes/config.yaml`:
+Enable the DOGA plugin in `~/.hermes/config.yaml`:
 
 ```yaml
 plugins:
@@ -80,21 +79,21 @@ doga:
 | `/doga off` | Disable DOGA |
 | `/doga status` | Show current settings |
 | `/doga auto` | Automatic depth, selects low, medium, or high per query (default) |
-| `/doga manual low\|medium\|high` | Force a specific thinking level |
-| `/doga depth <1-5>` | Set thinking depth (switches to manual mode) |
+| `/doga manual high` | Example: force high thinking depth. Use `low`, `medium`, or `high` |
+| `/doga depth 4` | Example: set thinking depth to 4, from 1 to 5 |
 | `/doga hats on` | Enable De Bono parallel thinking hats (default) |
 | `/doga hats off` | Disable De Bono hats (reverts to standard goal/scenario prompts) |
 | `/doga show` | Show simulation panel |
 | `/doga hide` | Hide simulation panel |
 | `/doga memory on` | Enable goal memory (requires Mnemosyne) |
 | `/doga memory off` | Disable goal memory |
-| `/doga jev on` | Enable Jev response contracts (requires `OPENROUTER_API_KEY` or `TYPESAFE_API_KEY`) |
-| `/doga jev off` | Disable Jev response contracts |
-| `/doga max_recursion <1-5>` | Max recursion depth for `reason_deeper` tool (default: 3) |
+| `/doga jev off` | Disable Jev response contracts, which are on by default |
+| `/doga jev on` | Re-enable Jev response contracts after turning them off |
+| `/doga max_recursion 3` | Example: set maximum `reason_deeper` depth from 1 to 5 |
 
 ### Jev Response Contract
 
-Jev is a typed decision model used here as a request classifier. When enabled, DOGA sends the user's request for one structured assessment of five facets:
+Jev is a typed decision model used here as a request classifier. It is enabled by default. For each user request, DOGA asks Jev for one structured assessment of five facets:
 
 1. **Goal:** information, understanding, or action.
 2. **Response mode:** answer, explain, recommend, or clarify.
@@ -136,16 +135,6 @@ A `reason_deeper` tool is registered for recursive self-critique. The LLM calls 
 ```
 
 Each recursion level applies a different De Bono thinking lens. The tool returns a structured instruction for deeper analysis. After `max_recursion` depth is reached, DOGA returns a stop signal; if the LLM ignores it 3 times, a hard-break terminates the loop.
-
----
-
-## Roadmap
-
-- **Phase 1 (done):** Optional Mnemosyne memory for goal pattern persistence
-- **Phase 2 (done):** Automatic depth selection based on query complexity
-- **De Bono Hats (done):** Six Thinking Hats structured reasoning, optional, depth aware
-- **Phase 3 (done):** Recursive reasoning with nested scenario simulation, `reason_deeper` tool
-- **Jev response contracts (added in this fork):** Typed request classification, OpenRouter primary route, and direct TypeSafe fallback
 
 ---
 
