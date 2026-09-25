@@ -45,6 +45,8 @@ pip install doga-hermes[memory]
 
 No config changes needed — DOGA auto-detects Mnemosyne at runtime.
 
+For live Jev response contracts, install DOGA as usual, set `TYPESAFE_API_KEY` in the Hermes process environment, then run `/doga jev on`. Jev classifies the request into a typed response contract that DOGA injects before the main model call. Disable with `/doga jev off`. Jev is off by default; if its API call fails, DOGA continues with its standard guidance. The key is read from the environment and is never placed in DOGA config or prompts.
+
 Then enable it in `~/.hermes/config.yaml`:
 
 ```yaml

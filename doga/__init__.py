@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import threading
 from typing import Any, Dict, Optional
@@ -18,6 +19,7 @@ from . import depth_selector
 from . import simulation_engine
 from . import thinking_prompt
 from . import output_formatter
+from . import response_contract
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +58,8 @@ class _PluginState:
         self.show_simulation: bool = True
         self.max_scenarios: int = 5
         self.memory_enabled: bool = True
+        self.jev_enabled: bool = False
+        self._last_jev_status: str = "disabled"
         self.de_bono_enabled: bool = True
         self.max_recursion: int = 3
         self._local = threading.local()
@@ -131,6 +135,7 @@ class _PluginState:
             "de_bono_hats": "enabled" if self.de_bono_enabled else "disabled",
             "max_recursion": self.max_recursion,
             "memory": "enabled" if self.memory_enabled else "disabled",
+            "jev": "enabled" if self.jev_enabled else "disabled",
             "mnemosyne": "available" if MNEMOSYNE_AVAILABLE else "not installed",
         }
 
@@ -194,6 +199,15 @@ def _on_pre_llm_call(
         past_patterns=past_patterns,
         hats_enabled=_state.de_bono_enabled,
     )
+    if _state.jev_enabled and user_message:
+        try:
+            judged = response_contract.evaluate_contract(user_message)
+            contract = response_contract.build_contract(judged)
+            guide += "\n\n" + response_contract.render_contract(contract)
+            _state._last_jev_status = "ok"
+        except Exception as exc:
+            _state._last_jev_status = "error"
+            logger.warning("DOGA Jev contract failed; using standard guidance: %s", exc)
     return {"context": guide}
 
 
@@ -468,8 +482,10 @@ Subcommands:
   max_recursion <1-5>  Max recursion depth for reason_deeper tool (default: 3)
   show                 Show simulation panel in responses
   hide                 Hide simulation panel (only final answer)
-  memory on            Enable Mnemosyne goal memory (requires pip install mnemosyne-memory)
-  memory off           Disable Mnemosyne goal memory
+  memory on           Enable Mnemosyne goal memory (requires pip install mnemosyne-memory)
+  memory off          Disable Mnemosyne goal memory
+  jev on              Enable Jev response contracts (requires TYPESAFE_API_KEY)
+  jev off             Disable Jev response contracts
 
 Current state: {state}
 """
@@ -502,6 +518,7 @@ def _handle_doga(raw_args: str) -> Optional[str]:
             "DOGA status:\n"
             f"  Enabled: {_state.enabled}\n"
             f"  Mode: {mode}\n"
+            f"  Jev: {'enabled' if _state.jev_enabled else 'disabled'} (last: {_state._last_jev_status})\n"
             f"  Show simulation: {_state.show_simulation}\n"
             f"  Max scenarios: {_state.max_scenarios}\n"
             f"  De Bono hats: {hat_status}\n"
@@ -570,6 +587,22 @@ def _handle_doga(raw_args: str) -> Optional[str]:
         except ValueError:
             return "Invalid number. Use /doga max_recursion <1-5>."
 
+    if sub == "jev":
+        if len(argv) < 2:
+            return f"Jev: {'enabled' if _state.jev_enabled else 'disabled'}\nUsage: /doga jev on|off"
+        setting = argv[1].lower()
+        if setting == "on":
+            if not os.environ.get("TYPESAFE_API_KEY"):
+                return "Jev requires TYPESAFE_API_KEY in the environment. Set it before enabling Jev."
+            _state.jev_enabled = True
+            _state._last_jev_status = "ready"
+            return "DOGA Jev response contracts enabled."
+        if setting == "off":
+            _state.jev_enabled = False
+            _state._last_jev_status = "disabled"
+            return "DOGA Jev response contracts disabled."
+        return "Usage: /doga jev on|off"
+
     if sub == "memory":
         if len(argv) < 2:
             return f"Memory: {'enabled' if _state.memory_enabled else 'disabled'} ({'available' if MNEMOSYNE_AVAILABLE else 'not installed'})\nUsage: /doga memory on|off"
@@ -619,5 +652,5 @@ def register(ctx) -> None:
         "doga",
         handler=_handle_doga,
         description="Control DOGA probabilistic thinking.",
-        args_hint="on|off|status|auto|manual low|medium|high|depth <1-5>|hats on|off|max_recursion <1-5>|show|hide|memory on|off",
+        args_hint="on|off|status|auto|manual low|medium|high|depth <1-5>|hats on|off|max_recursion <1-5>|show|hide|memory on|off|jev on|off",
     )
