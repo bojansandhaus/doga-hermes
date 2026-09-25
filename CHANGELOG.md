@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.1.1 (2026-09-25)
+
+### Fixed
+- Preserve Jev's high ambiguity signal when its selected response mode is not `clarify`. DOGA now requires a conditional answer that states material assumptions and identifies missing information that could change the answer.
+- Keep the focused clarification path when Jev selects `clarify` and the ambiguity score is at least 0.7.
+- Correct setuptools' build backend and package discovery so the DOGA Python distribution builds without treating the `assets` directory as a package.
+
+### Tests
+- Add regression coverage for the conflicting `recommend` plus high ambiguity result, explicit clarification, and low ambiguity recommendation.
+
+### Verification
+- Full test suite: 133 passed.
+- Python compilation, version consistency, and `git diff --check` passed.
+- Wheel build passed.
+
+---
+
 ## v1.1.0 (2026-05-24)
 
 ### Features

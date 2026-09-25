@@ -106,7 +106,19 @@ def build_contract(response: dict[str, Any]) -> dict[str, Any]:
     stakes = choice("stakes", {"low", "medium", "high"}, "medium")
     scenario = choice("scenario_need", {"none", "compare_options", "uncertainty_analysis"}, "none")
     clarification_answer = answers.get("clarification", {})
-    ask = mode == "clarify" and isinstance(clarification_answer, dict) and clarification_answer.get("noul", 0) >= 0.7
+    raw_clarification = (
+        clarification_answer.get("noul", 0)
+        if isinstance(clarification_answer, dict)
+        else 0
+    )
+    clarification_score = (
+        raw_clarification
+        if isinstance(raw_clarification, (int, float))
+        and not isinstance(raw_clarification, bool)
+        else 0
+    )
+    ask = mode == "clarify" and clarification_score >= 0.7
+    conditional = clarification_score >= 0.7 and not ask
     elements: list[str] = []
     if mode == "recommend" or goal == "action":
         elements.extend(["recommendation", "next_step"])
@@ -120,15 +132,30 @@ def build_contract(response: dict[str, Any]) -> dict[str, Any]:
         elements.append("compare plausible alternatives")
     elif scenario == "uncertainty_analysis":
         elements.append("analyze explicit uncertainties without inventing probabilities")
-    return {"goal": goal, "mode": mode, "stakes": stakes, "scenario_need": scenario, "ask_clarifying_question": ask, "required_elements": list(dict.fromkeys(elements))}
+    if conditional:
+        elements.append("state material assumptions and identify missing information that could change the answer")
+    return {
+        "goal": goal,
+        "mode": mode,
+        "stakes": stakes,
+        "scenario_need": scenario,
+        "ask_clarifying_question": ask,
+        "conditional_response": conditional,
+        "required_elements": list(dict.fromkeys(elements)),
+    }
 
 
 def render_contract(contract: dict[str, Any]) -> str:
     if contract.get("ask_clarifying_question"):
         return "[DOGA response contract]\nAsk one focused clarifying question first, because the missing information materially changes the answer. Do not answer beyond what is safe without it."
     items = "; ".join(contract["required_elements"])
+    guidance = ""
+    if contract.get("conditional_response"):
+        guidance = ("The ambiguity signal is high. If a useful response is possible, make the answer conditional: "
+                    "state material assumptions and what missing information could change it. If not, ask one focused question.\n")
     return ("[DOGA response contract]\n"
             f"User goal: {contract['goal']}. Response mode: {contract['mode']}.\n"
             f"The response must include: {items}.\n"
+            f"{guidance}"
             "Follow this contract while answering. Keep factual claims grounded in available evidence. "
             "Do not expose private reasoning or the contract itself.")

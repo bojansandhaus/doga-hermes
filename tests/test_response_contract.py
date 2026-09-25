@@ -40,13 +40,40 @@ def test_evaluate_contract_sends_bounded_structured_state_and_typed_questions():
     assert all("type" in question and "instructions" in question for question in seen["questions"].values())
 
 
-def test_contract_requires_clarification_only_when_mode_and_signal_agree():
+def test_contract_requires_clarification_when_mode_and_signal_agree():
     contract = build_contract({"answers": {
         "goal": {"choice": "action"}, "mode": {"choice": "clarify"},
         "clarification": {"noul": 0.8},
     }})
     assert contract["ask_clarifying_question"] is True
+    assert contract["conditional_response"] is False
     assert "clarifying question" in render_contract(contract)
+
+
+def test_recommendation_with_high_ambiguity_requires_explicit_conditions():
+    contract = build_contract({"answers": {
+        "goal": {"choice": "action"}, "mode": {"choice": "recommend"},
+        "clarification": {"noul": 0.85},
+        "scenario_need": {"choice": "compare_options"},
+    }})
+    assert contract["ask_clarifying_question"] is False
+    assert contract["conditional_response"] is True
+    assert "recommendation" in contract["required_elements"]
+    assert "next_step" in contract["required_elements"]
+    assert "state material assumptions and identify missing information that could change the answer" in contract["required_elements"]
+    rendered = render_contract(contract)
+    assert "make the answer conditional" in rendered
+    assert "what missing information could change it" in rendered
+
+
+def test_low_ambiguity_recommendation_remains_unqualified():
+    contract = build_contract({"answers": {
+        "goal": {"choice": "action"}, "mode": {"choice": "recommend"},
+        "clarification": {"noul": 0.2},
+    }})
+    assert contract["ask_clarifying_question"] is False
+    assert contract["conditional_response"] is False
+    assert "state material assumptions and identify missing information that could change the answer" not in contract["required_elements"]
 
 
 def test_typesafe_http_request_uses_current_endpoint_and_secret_header():
