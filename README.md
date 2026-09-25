@@ -1,29 +1,36 @@
-# DOGA
+# DOGA with Jev for Hermes
 
-[![MIT License](https://img.shields.io/github/license/0z1-ghb/doga-hermes)](https://github.com/0z1-ghb/doga-hermes/blob/main/LICENSE)
-[![Python 3.10 | 3.11 | 3.12](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://github.com/0z1-ghb/doga-hermes)
-[![CI](https://img.shields.io/github/actions/workflow/status/0z1-ghb/doga-hermes/test.yml)](https://github.com/0z1-ghb/doga-hermes/actions)
-[![Last Commit](https://img.shields.io/github/last-commit/0z1-ghb/doga-hermes)](https://github.com/0z1-ghb/doga-hermes)
-[![Release](https://img.shields.io/github/v/release/0z1-ghb/doga-hermes)](https://github.com/0z1-ghb/doga-hermes/releases)
+[![MIT License](https://img.shields.io/github/license/bojansandhaus/doga-hermes)](https://github.com/bojansandhaus/doga-hermes/blob/main/LICENSE)
+[![Python 3.10 | 3.11 | 3.12](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://github.com/bojansandhaus/doga-hermes)
+[![CI](https://img.shields.io/github/actions/workflow/status/bojansandhaus/doga-hermes/test.yml)](https://github.com/bojansandhaus/doga-hermes/actions)
+[![Last Commit](https://img.shields.io/github/last-commit/bojansandhaus/doga-hermes)](https://github.com/bojansandhaus/doga-hermes)
+[![Release](https://img.shields.io/github/v/release/bojansandhaus/doga-hermes)](https://github.com/bojansandhaus/doga-hermes/releases)
 
 ![DOGA](assets/DOGA.png)
 
-**Probabilistic, goal-aware thinking layer for Hermes Agent.**
+**A probabilistic, goal-aware thinking layer for Hermes Agent, extended with Jev response contracts.**
 
-DOGA (Doğa Turkish for "nature") adds scenario simulation, Monte Carlo reasoning, and goal detection to LLM responses. It guides the model to think probabilistically before answering, without modifying core Hermes behavior.
+DOGA (Doğa, Turkish for “nature”) adds scenario simulation, Monte Carlo reasoning, and goal detection to Hermes responses. This fork adds an optional Jev feature that classifies the request and gives the main model a compact response contract to follow. DOGA remains a plugin and does not modify Hermes core.
+
+This is an independent fork and extension of the original [DOGA project by @0z1-ghb](https://github.com/0z1-ghb/doga-hermes). The upstream README describes DOGA as:
+
+> “Probabilistic, goal-aware thinking layer for Hermes Agent.”
+>
+> Quoted from the original project by [@0z1-ghb](https://github.com/0z1-ghb).
 
 ---
 
 ## Features
 
 - **Goal Detection**  Identifies whether the user needs Information, Understanding, or Action before responding
+- **Jev Response Contract**  Optional typed assessment of the user's goal, response mode, stakes, need for clarification, and scenario analysis. DOGA turns it into concrete answer requirements for the main model. OpenRouter is primary, with direct TypeSafe as fallback.
 - **Scenario Generation**  Prompts the LLM to enumerate and weigh multiple interpretations
-- **Monte Carlo Simulation**  Pure Python engine (10K–50K iterations) for quantitative probability analysis, using 0 LLM tokens
+- **Monte Carlo Simulation**  Pure Python engine (10,000 to 50,000 iterations) for quantitative probability analysis, using 0 LLM tokens
 - **Thinking Panel**  `<world_model>` reasoning blocks are extracted and displayed as a structured `[DOGA: Thinking Process]` panel before the final response
-- **Auto Depth**  Automatic complexity assessment per query — decides low/medium/high using pure Python string analysis (0 LLM tokens)
+- **Auto Depth**  Automatic complexity assessment per query. It selects low, medium, or high using pure Python string analysis (0 LLM tokens)
 - **Configurable Depth**  5 levels (1 = lightweight goal check, 5 = full probabilistic reasoning with simulation tool guidance)
 - **Memory Integration (optional)**  Remembers goal patterns across sessions via Mnemosyne (`pip install doga-hermes[memory]`)
-- **De Bono Thinking Hats**  Structured parallel reasoning through Six Thinking Hats lens — depth-aware (White, Black, Yellow, Green, Red), optional, enabled by default
+- **De Bono Thinking Hats**  Structured parallel reasoning through Six Thinking Hats lenses, depth aware (White, Black, Yellow, Green, Red), optional, enabled by default
 - **Recursive Reasoning**  `reason_deeper` tool for multi-level self-critique; each recursion level uses a different De Bono hat lens; hierarchical panel output
 - **Hard-Break Safety**  Automatic stop after 3 ignored `reason_deeper` calls prevents tool-loop starvation
 
@@ -43,9 +50,13 @@ For goal memory persistence across sessions (optional):
 pip install doga-hermes[memory]
 ```
 
-No config changes needed — DOGA auto-detects Mnemosyne at runtime.
+No configuration changes are needed. DOGA detects Mnemosyne at runtime.
 
-For live Jev response contracts, install DOGA as usual, set `TYPESAFE_API_KEY` in the Hermes process environment, then run `/doga jev on`. Jev classifies the request into a typed response contract that DOGA injects before the main model call. Disable with `/doga jev off`. Jev is off by default; if its API call fails, DOGA continues with its standard guidance. The key is read from the environment and is never placed in DOGA config or prompts.
+### Optional Jev setup
+
+Jev response contracts are off by default. To enable them, make `OPENROUTER_API_KEY` available to the Hermes process. For failover, also provide `TYPESAFE_API_KEY`. Then use `/doga jev on`. DOGA reads both keys from the process environment. It does not store keys in DOGA configuration or include them in model prompts.
+
+DOGA sends the user's request to Jev through OpenRouter first, using model `typesafe/jev-1.13` at `https://openrouter.ai/api/alpha/decisions`. If that key is missing or the request fails, DOGA tries TypeSafe directly, using model `jev-latest` at `https://api.typesafe.ai/v1/systemone`. If only `TYPESAFE_API_KEY` is set, DOGA uses the direct TypeSafe route. If both calls fail, DOGA continues with its standard guidance. `JEV_PROVIDER_MODE` configures the separate `jev-decisions` Hermes plugin and does not control DOGA's provider route.
 
 Then enable it in `~/.hermes/config.yaml`:
 
@@ -72,7 +83,7 @@ doga:
 | `/doga on` | Enable DOGA |
 | `/doga off` | Disable DOGA |
 | `/doga status` | Show current settings |
-| `/doga auto` | Automatic depth — decides low/medium/high per query (default) |
+| `/doga auto` | Automatic depth, selects low, medium, or high per query (default) |
 | `/doga manual low\|medium\|high` | Force a specific thinking level |
 | `/doga depth <1-5>` | Set thinking depth (switches to manual mode) |
 | `/doga hats on` | Enable De Bono parallel thinking hats (default) |
@@ -81,7 +92,23 @@ doga:
 | `/doga hide` | Hide simulation panel |
 | `/doga memory on` | Enable goal memory (requires Mnemosyne) |
 | `/doga memory off` | Disable goal memory |
+| `/doga jev on` | Enable Jev response contracts (requires `OPENROUTER_API_KEY` or `TYPESAFE_API_KEY`) |
+| `/doga jev off` | Disable Jev response contracts |
 | `/doga max_recursion <1-5>` | Max recursion depth for `reason_deeper` tool (default: 3) |
+
+### Jev Response Contract
+
+Jev is a typed decision model used here as a request classifier. When enabled, DOGA sends the user's request for one structured assessment of five facets:
+
+1. **Goal:** information, understanding, or action.
+2. **Response mode:** answer, explain, recommend, or clarify.
+3. **Stakes:** low, medium, or high.
+4. **Clarification:** whether a missing fact materially changes the useful answer.
+5. **Scenario need:** none, compare options, or analyze explicit uncertainty.
+
+DOGA maps those judgments into a compact response contract. For example, an action request can require a recommendation and next step. High stakes add a request to address material risks and uncertainty. A clarification question is requested only when Jev selects clarify and the uncertainty signal is strong enough. The contract is added to DOGA's pre-model guidance; the main Hermes model still reasons through the task and writes the answer. Jev does not write the final response, and its judgments are guidance rather than verified facts or calibrated probabilities.
+
+The primary request goes to OpenRouter. TypeSafe is tried only when OpenRouter is unavailable or its request fails, or when no OpenRouter key is configured. The same user request may therefore be sent to TypeSafe during failover. Use this feature only when sending that request to those providers is acceptable; provider usage may incur charges. If both routes fail, DOGA silently keeps its ordinary goal and scenario guidance rather than blocking the answer.
 
 ### Simulate Tool
 
@@ -118,10 +145,11 @@ Each recursion level applies a different De Bono thinking lens. The tool returns
 
 ## Roadmap
 
-- **Phase 1 (done)** — Optional Mnemosyne memory for goal pattern persistence
-- **Phase 2 (done)** — Automatic depth selection based on query complexity
-- **De Bono Hats (done)** — Six Thinking Hats structured reasoning, optional, depth-aware
-- **Phase 3 (done)** — Recursive reasoning with nested scenario simulation, `reason_deeper` tool
+- **Phase 1 (done):** Optional Mnemosyne memory for goal pattern persistence
+- **Phase 2 (done):** Automatic depth selection based on query complexity
+- **De Bono Hats (done):** Six Thinking Hats structured reasoning, optional, depth aware
+- **Phase 3 (done):** Recursive reasoning with nested scenario simulation, `reason_deeper` tool
+- **Jev response contracts (added in this fork):** Typed request classification, OpenRouter primary route, and direct TypeSafe fallback
 
 ---
 
@@ -131,11 +159,19 @@ DOGA uses three Hermes plugin hooks:
 
 | Hook | Purpose |
 |------|---------|
-| `pre_llm_call` | Inject goal detection + scenario guidance into the prompt |
+| `pre_llm_call` | Inject goal detection, scenario guidance, and the optional Jev response contract |
 | `transform_llm_output` | Extract `<world_model>` blocks, format as thinking panel |
 | `post_tool_call` | Log tool usage; track `reason_deeper` recursion depth and stack |
 
-No core Hermes files are modified  DOGA is a pure plugin.
+No Hermes core files are modified. DOGA is a pure plugin.
+
+---
+
+## About
+
+This repository is an independent fork of [DOGA by @0z1-ghb](https://github.com/0z1-ghb/doga-hermes), released under the upstream MIT license. The fork retains the original DOGA features and adds an optional Jev response contract. That extension classifies a request with typed questions, then turns the results into response requirements. The main Hermes model remains responsible for the answer. Jev requests use OpenRouter first and direct TypeSafe as fallback.
+
+The original project describes DOGA as “Probabilistic, goal-aware thinking layer for Hermes Agent.” The original author is credited above and in the fork history. This fork is community maintained and is not an official Hermes, TypeSafe, or OpenRouter project.
 
 ---
 

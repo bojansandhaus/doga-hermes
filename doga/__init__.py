@@ -484,7 +484,7 @@ Subcommands:
   hide                 Hide simulation panel (only final answer)
   memory on           Enable Mnemosyne goal memory (requires pip install mnemosyne-memory)
   memory off          Disable Mnemosyne goal memory
-  jev on              Enable Jev response contracts (requires TYPESAFE_API_KEY)
+  jev on              Enable Jev response contracts (OpenRouter, TypeSafe fallback)
   jev off             Disable Jev response contracts
 
 Current state: {state}
@@ -592,8 +592,8 @@ def _handle_doga(raw_args: str) -> Optional[str]:
             return f"Jev: {'enabled' if _state.jev_enabled else 'disabled'}\nUsage: /doga jev on|off"
         setting = argv[1].lower()
         if setting == "on":
-            if not os.environ.get("TYPESAFE_API_KEY"):
-                return "Jev requires TYPESAFE_API_KEY in the environment. Set it before enabling Jev."
+            if not (os.environ.get("OPENROUTER_API_KEY") or os.environ.get("TYPESAFE_API_KEY")):
+                return "Jev requires OPENROUTER_API_KEY or TYPESAFE_API_KEY in the environment."
             _state.jev_enabled = True
             _state._last_jev_status = "ready"
             return "DOGA Jev response contracts enabled."

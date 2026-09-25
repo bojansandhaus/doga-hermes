@@ -65,3 +65,73 @@ def test_typesafe_http_request_uses_current_endpoint_and_secret_header():
     request = urlopen.call_args.args[0]
     assert request.full_url == "https://api.typesafe.ai/v1/systemone"
     assert request.get_header("Authorization") == "Bearer test-secret"
+
+
+def test_jev_request_prefers_openrouter_when_both_keys_are_available(monkeypatch):
+    from doga import response_contract
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "router-key")
+    monkeypatch.setenv("TYPESAFE_API_KEY", "typesafe-key")
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def read(self):
+            return b'{"answers": {"goal": {"choice": "information"}}}'
+
+    with patch.object(response_contract.urllib.request, "urlopen", return_value=FakeResponse()) as urlopen:
+        result = response_contract._request_jev({"user_request": "hello"}, {"goal": {"type": "choice"}})
+
+    request = urlopen.call_args.args[0]
+    payload = __import__("json").loads(request.data)
+    assert result["answers"]["goal"]["choice"] == "information"
+    assert request.full_url == "https://openrouter.ai/api/alpha/decisions"
+    assert request.get_header("Authorization") == "Bearer router-key"
+    assert payload["model"] == "typesafe/jev-1.13"
+
+
+def test_jev_request_falls_back_to_typesafe_after_openrouter_failure(monkeypatch):
+    from doga import response_contract
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "router-key")
+    monkeypatch.setenv("TYPESAFE_API_KEY", "typesafe-key")
+    fallback_result = {"model": "jev-latest", "answers": {"goal": {"choice": "action"}}}
+
+    with patch.object(response_contract, "_request_openrouter", side_effect=RuntimeError("unavailable")) as primary, \
+         patch.object(response_contract, "_request_typesafe", return_value=fallback_result) as fallback:
+        result = response_contract._request_jev({"user_request": "hello"}, {"goal": {"type": "choice"}})
+
+    primary.assert_called_once_with({"user_request": "hello"}, {"goal": {"type": "choice"}}, api_key="router-key")
+    fallback.assert_called_once_with({"user_request": "hello"}, {"goal": {"type": "choice"}}, api_key="typesafe-key")
+    assert result == fallback_result
+
+
+def test_jev_request_uses_typesafe_when_openrouter_key_is_absent(monkeypatch):
+    from doga import response_contract
+
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setenv("TYPESAFE_API_KEY", "typesafe-key")
+    expected = {"answers": {"goal": {"choice": "information"}}}
+
+    with patch.object(response_contract, "_request_typesafe", return_value=expected) as fallback:
+        result = response_contract._request_jev({}, {})
+
+    fallback.assert_called_once_with({}, {}, api_key="typesafe-key")
+    assert result == expected
+
+
+def test_jev_request_requires_at_least_one_provider_key(monkeypatch):
+    from doga import response_contract
+
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+
+    try:
+        response_contract._request_jev({}, {})
+    except RuntimeError as exc:
+        assert "OPENROUTER_API_KEY" in str(exc)
+        assert "TYPESAFE_API_KEY" in str(exc)
+    else:
+        raise AssertionError("expected an actionable missing-key error")

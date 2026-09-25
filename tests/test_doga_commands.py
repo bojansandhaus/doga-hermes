@@ -174,13 +174,16 @@ def test_status_with_memory_disabled():
 
 def test_jev_on_requires_api_key(monkeypatch):
     monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     result = plugin._handle_doga("jev on")
+    assert "OPENROUTER_API_KEY" in result
     assert "TYPESAFE_API_KEY" in result
     assert plugin._state.jev_enabled is False
 
 
 def test_jev_on_and_off(monkeypatch):
-    monkeypatch.setenv("TYPESAFE_API_KEY", "test-secret")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "router-secret")
+    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
     assert "enabled" in plugin._handle_doga("jev on")
     assert plugin._state.jev_enabled is True
     assert "disabled" in plugin._handle_doga("jev off")

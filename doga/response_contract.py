@@ -9,6 +9,8 @@ from typing import Any, Callable
 
 API_URL = "https://api.typesafe.ai/v1/systemone"
 MODEL = "jev-latest"
+OPENROUTER_API_URL = "https://openrouter.ai/api/alpha/decisions"
+OPENROUTER_MODEL = "typesafe/jev-1.13"
 QUESTIONS = {
     "goal": {"type": "choice", "instructions": "What is the user's primary desired outcome?", "criteria": {"information": "Factual answer, analysis, or explanation.", "understanding": "Feel heard, validated, or understood.", "action": "A decision, recommendation, or next step."}},
     "mode": {"type": "choice", "instructions": "What response mode best serves the request?", "criteria": {"answer": "Give the requested direct answer or information.", "explain": "Explain concepts or implications without deciding for the user.", "recommend": "Make a recommendation or propose a concrete next action.", "clarify": "A missing fact materially changes the answer; ask one focused question."}},
@@ -35,7 +37,58 @@ def _request_typesafe(state: dict[str, Any], questions: dict[str, Any], api_key:
     return data
 
 
-def evaluate_contract(user_message: str, evaluator: Callable[..., dict[str, Any]] = _request_typesafe) -> dict[str, Any]:
+def _request_openrouter(state: dict[str, Any], questions: dict[str, Any], api_key: str | None = None) -> dict[str, Any]:
+    key = api_key or os.environ.get("OPENROUTER_API_KEY")
+    if not key:
+        raise RuntimeError("OPENROUTER_API_KEY is not set")
+    payload = json.dumps({"state": state, "model": OPENROUTER_MODEL, "questions": questions}).encode()
+    request = urllib.request.Request(
+        OPENROUTER_API_URL,
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://hermes-agent.nousresearch.com",
+            "X-Title": "DOGA Hermes Plugin",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            data = json.loads(response.read().decode())
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"OpenRouter API returned HTTP {exc.code}") from exc
+    if not isinstance(data, dict) or not isinstance(data.get("answers"), dict):
+        raise RuntimeError("OpenRouter API returned an invalid response")
+    return data
+
+
+def _request_jev(state: dict[str, Any], questions: dict[str, Any]) -> dict[str, Any]:
+    """Use OpenRouter first, then direct TypeSafe if the primary route fails."""
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+    typesafe_key = os.environ.get("TYPESAFE_API_KEY")
+    errors: list[str] = []
+
+    if openrouter_key:
+        try:
+            return _request_openrouter(state, questions, api_key=openrouter_key)
+        except Exception as exc:
+            errors.append(f"OpenRouter request failed: {exc}")
+
+    if typesafe_key:
+        try:
+            return _request_typesafe(state, questions, api_key=typesafe_key)
+        except Exception as exc:
+            errors.append(f"TypeSafe fallback failed: {exc}")
+
+    if errors:
+        if not typesafe_key:
+            errors.append("TYPESAFE_API_KEY is not set for fallback")
+        raise RuntimeError("; ".join(errors))
+    raise RuntimeError("Set OPENROUTER_API_KEY or TYPESAFE_API_KEY to enable Jev")
+
+
+def evaluate_contract(user_message: str, evaluator: Callable[..., dict[str, Any]] = _request_jev) -> dict[str, Any]:
     """Ask independent typed judgments in one call over the request only."""
     return evaluator(state={"user_request": user_message}, questions=QUESTIONS)
 
