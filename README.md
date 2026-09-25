@@ -12,7 +12,7 @@
 
 DOGA (Doğa, Turkish for “nature”) adds scenario simulation, Monte Carlo reasoning, and goal detection to Hermes responses. This fork adds an optional Jev feature that classifies the request and gives the main model a compact response contract to follow. DOGA remains a plugin and does not modify Hermes core.
 
-This is an independent fork and extension of the original [DOGA project by @0z1-ghb](https://github.com/0z1-ghb/doga-hermes). The upstream README describes DOGA as:
+This is an independent fork and slight adjustment of the original [DOGA project by @0z1-ghb](https://github.com/0z1-ghb/doga-hermes). The upstream README describes DOGA as:
 
 > “Probabilistic, goal-aware thinking layer for Hermes Agent.”
 >
@@ -169,9 +169,9 @@ No Hermes core files are modified. DOGA is a pure plugin.
 
 ## About
 
-This repository is an independent fork of [DOGA by @0z1-ghb](https://github.com/0z1-ghb/doga-hermes), released under the upstream MIT license. The fork retains the original DOGA features and adds an optional Jev response contract. That extension classifies a request with typed questions, then turns the results into response requirements. The main Hermes model remains responsible for the answer. Jev requests use OpenRouter first and direct TypeSafe as fallback.
+This repository is an independent fork and modest adjustment of [DOGA by @0z1-ghb](https://github.com/0z1-ghb/doga-hermes), released under the upstream MIT license. It retains DOGA's original probabilistic reasoning, simulation, and Hermes plugin behavior, and adds an optional Jev response contract with OpenRouter primary and direct TypeSafe fallback. Jev classifies the user's request; the main Hermes model remains responsible for reasoning through it and writing the answer.
 
-The original project describes DOGA as “Probabilistic, goal-aware thinking layer for Hermes Agent.” The original author is credited above and in the fork history. This fork is community maintained and is not an official Hermes, TypeSafe, or OpenRouter project.
+The quoted description above is from the original DOGA README by @0z1-ghb. This fork is community maintained and is not an official Hermes, TypeSafe, or OpenRouter project.
 
 ---
 
