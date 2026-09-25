@@ -8,7 +8,7 @@
 
 **Probabilistic, goal-aware thinking layer for Hermes Agent.**
 
-Built by [@0z1-ghb](https://github.com/0z1-ghb). This independent fork makes a small adjustment to DOGA by adding optional Jev response contracts and OpenRouter primary routing with direct TypeSafe fallback.
+Built by [@0z1-ghb](https://github.com/0z1-ghb). This independent fork makes an adjustment to DOGA by adding Jev response contracts and OpenRouter primary routing with direct TypeSafe fallback.
 
 DOGA (Doğa, Turkish for “nature”) adds scenario simulation, Monte Carlo reasoning, and goal detection to Hermes responses. It remains a plugin and does not modify Hermes core.
 
@@ -153,7 +153,7 @@ No Hermes core files are modified. DOGA is a pure plugin.
 
 ## About
 
-This repository is an independent fork and modest adjustment of [DOGA by @0z1-ghb](https://github.com/0z1-ghb/doga-hermes), released under the upstream MIT license. It retains DOGA's original probabilistic reasoning, simulation, and Hermes plugin behavior, and adds an optional Jev response contract with OpenRouter primary and direct TypeSafe fallback. Jev classifies the user's request; the main Hermes model remains responsible for reasoning through it and writing the answer.
+This repository is an independent fork and adjustment of [DOGA by @0z1-ghb](https://github.com/0z1-ghb/doga-hermes), released under the upstream MIT license. It retains DOGA's original probabilistic reasoning, simulation, and Hermes plugin behavior, and adds a Jev response contract with OpenRouter primary and direct TypeSafe fallback. Jev classifies the user's request; the main Hermes model remains responsible for reasoning through it and writing the answer.
 
 Original DOGA was built by [@0z1-ghb](https://github.com/0z1-ghb). This community maintained fork adds Jev response contracts and is not an official Hermes, TypeSafe, or OpenRouter project.
 
