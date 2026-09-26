@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.3.0 (2026-09-26)
+
+### Added
+- One explicit response-contract mode selector: `jev_api`, `laya_local`, or `laya_with_jev_fallback`. Set `DOGA_DECISION_MODE` at startup or select `/doga mode` in the current process. Existing provider and fallback environment variables and commands remain as compatibility aliases; the new environment setting takes precedence.
+- Local failure categories are logged without the request text. After three consecutive Laya failures, further Jev fallback is suppressed in that process until Laya succeeds; ordinary DOGA guidance remains available.
+- Reproducible 100-question, three-mode benchmark report and sanitized per-case results under `docs/benchmarks/`.
+
+### Changed
+- Status and help report the effective mode instead of implying that Laya is an additional provider in Jev's route. The legacy `/doga jev on|off` still toggles response contracts regardless of mode. Selecting a legacy provider resets fallback, and enabling fallback while Jev is selected is rejected.
+- GitHub metadata and README badges now point to this fork while the README continues to attribute upstream DOGA.
+
+### Evaluation and limitations
+- On 100 authored, subjective labels, Jev agreed on goal 88, mode 68, stakes 67, scenario need 70, and high/low ambiguity 87. Laya agreed on 56, 41, 37, 59, and 67 respectively. Both injected contracts in all 100 matched cases; healthy Laya fallback mode was identical to local-only and made no Jev provider request. Laya detected none of the 30 high-ambiguity authored labels at the existing 0.7 threshold. Keep Jev as the recommended default, and do not treat this as a final-answer quality study.
+- The fallback circuit breaker bounds repeated remote egress after local errors, but it cannot detect a valid yet incorrect Laya judgment. Laya's checkpoint confidence remains uncalibrated. No threshold was tuned on the benchmark set.
+
+### Verification
+- Local test suite, package build, fresh Hermes plugin doctor, and representative hook probes: see the published release verification record. The running gateway is not activated by installing plugin files; a later restart is required.
+
+---
+
 ## v1.2.0 (2026-09-26)
 
 ### Added

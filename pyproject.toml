@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "doga-hermes"
-version = "1.2.0"
+version = "1.3.0"
 description = "Probabilistic, goal-aware thinking layer for Hermes Agent"
 readme = "README.md"
 license = { text = "MIT" }
@@ -24,8 +24,8 @@ memory = ["mnemosyne-memory"]
 laya = ["laya>=0.3.20,<1"]
 
 [project.urls]
-Homepage = "https://github.com/0z1-ghb/doga-hermes"
-Repository = "https://github.com/0z1-ghb/doga-hermes"
+Homepage = "https://github.com/bojansandhaus/doga-jev-hermes"
+Repository = "https://github.com/bojansandhaus/doga-jev-hermes"
 
 [tool.setuptools.packages.find]
 include = ["doga*"]

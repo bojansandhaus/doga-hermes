@@ -62,6 +62,15 @@ class _PluginState:
         self._last_jev_status: str = "enabled"
         self.decision_provider: str = os.environ.get("DOGA_DECISION_PROVIDER", "jev").strip().lower()
         self.jev_fallback: bool = os.environ.get("DOGA_LAYA_JEV_FALLBACK", "0").strip().lower() in {"1", "true", "yes"}
+        startup_mode = os.environ.get("DOGA_DECISION_MODE", "").strip().lower()
+        if startup_mode:
+            self.decision_provider, self.jev_fallback = {
+                "jev_api": ("jev", False),
+                "laya_local": ("laya", False),
+                "laya_with_jev_fallback": ("laya", True),
+            }.get(startup_mode, (startup_mode, False))
+        elif self.decision_provider != "laya":
+            self.jev_fallback = False
         self.de_bono_enabled: bool = True
         self.max_recursion: int = 3
         self._local = threading.local()
@@ -126,6 +135,14 @@ class _PluginState:
     def _stop_count(self, value: int):
         self._local.stop_count = value
 
+    @property
+    def decision_mode(self) -> str:
+        if self.decision_provider == "jev":
+            return "jev_api"
+        if self.decision_provider == "laya":
+            return "laya_with_jev_fallback" if self.jev_fallback else "laya_local"
+        return f"invalid ({self.decision_provider})"
+
     def to_dict(self) -> dict:
         mode = f"auto (complexity: {self._last_complexity})" if self.auto_depth else f"manual (depth: {self.depth})"
         return {
@@ -138,6 +155,7 @@ class _PluginState:
             "max_recursion": self.max_recursion,
             "memory": "enabled" if self.memory_enabled else "disabled",
             "jev": "enabled" if self.jev_enabled else "disabled",
+            "decision_mode": self.decision_mode,
             "decision_provider": self.decision_provider,
             "jev_fallback": self.jev_fallback,
             "mnemosyne": "available" if MNEMOSYNE_AVAILABLE else "not installed",
@@ -212,7 +230,7 @@ def _on_pre_llm_call(
             _state._last_jev_status = "ok (jev fallback)" if judged.get("_doga_provider") == "jev_fallback" else "ok"
         except Exception as exc:
             _state._last_jev_status = "error"
-            logger.warning("DOGA %s contract failed; using standard guidance: %s", _state.decision_provider, exc)
+            logger.warning("DOGA %s contract failed (%s); using standard guidance", _state.decision_mode, type(exc).__name__)
     return {"context": guide}
 
 
@@ -489,10 +507,10 @@ Subcommands:
   hide                 Hide simulation panel (only final answer)
   memory on           Enable Mnemosyne goal memory (requires pip install mnemosyne-memory)
   memory off          Disable Mnemosyne goal memory
-  jev on              Enable Jev response contracts (default on)
-  jev off             Disable Jev response contracts
-  provider jev|laya   Choose remote Jev (default) or local Laya for response contracts
-  fallback on|off     Allow Jev if local Laya fails (default off)
+  jev on|off          Legacy alias: enable or disable response contracts
+  mode jev_api|laya_local|laya_with_jev_fallback  Select one classifier route
+  provider jev|laya   Legacy alias: select Jev or local-only Laya
+  fallback on|off     Legacy alias: change the Laya error fallback
 
 Current state: {state}
 """
@@ -525,7 +543,7 @@ def _handle_doga(raw_args: str) -> Optional[str]:
             "DOGA status:\n"
             f"  Enabled: {_state.enabled}\n"
             f"  Mode: {mode}\n"
-            f"  Response contracts: {'enabled' if _state.jev_enabled else 'disabled'} (provider: {_state.decision_provider}, jev fallback: {'on' if _state.jev_fallback else 'off'}, last: {_state._last_jev_status})\n"
+            f"  Response contracts: {'enabled' if _state.jev_enabled else 'disabled'} (mode: {_state.decision_mode}, last: {_state._last_jev_status})\n"
             f"  Show simulation: {_state.show_simulation}\n"
             f"  Max scenarios: {_state.max_scenarios}\n"
             f"  De Bono hats: {hat_status}\n"
@@ -594,18 +612,33 @@ def _handle_doga(raw_args: str) -> Optional[str]:
         except ValueError:
             return "Invalid number. Use /doga max_recursion <1-5>."
 
+    if sub == "mode":
+        modes = {
+            "jev_api": ("jev", False),
+            "laya_local": ("laya", False),
+            "laya_with_jev_fallback": ("laya", True),
+        }
+        if len(argv) != 2 or argv[1].lower() not in modes:
+            return "Usage: /doga mode jev_api|laya_local|laya_with_jev_fallback"
+        _state.decision_provider, _state.jev_fallback = modes[argv[1].lower()]
+        _state._last_jev_status = "enabled"
+        return f"DOGA response contract mode: {_state.decision_mode}."
+
     if sub == "provider":
         if len(argv) != 2 or argv[1].lower() not in {"jev", "laya"}:
             return "Usage: /doga provider jev|laya"
         _state.decision_provider = argv[1].lower()
+        _state.jev_fallback = False
         _state._last_jev_status = "enabled"
-        return f"DOGA response contract provider: {_state.decision_provider}."
+        return f"DOGA response contract mode: {_state.decision_mode}."
 
     if sub == "fallback":
         if len(argv) != 2 or argv[1].lower() not in {"on", "off"}:
             return "Usage: /doga fallback on|off"
+        if _state.decision_provider != "laya":
+            return "Jev fallback is only available with Laya. Select /doga mode laya_with_jev_fallback."
         _state.jev_fallback = argv[1].lower() == "on"
-        return f"DOGA Laya to Jev fallback: {'on' if _state.jev_fallback else 'off'}."
+        return f"DOGA response contract mode: {_state.decision_mode}."
 
     if sub == "jev":
         if len(argv) < 2:
@@ -614,11 +647,11 @@ def _handle_doga(raw_args: str) -> Optional[str]:
         if setting == "on":
             _state.jev_enabled = True
             _state._last_jev_status = "enabled"
-            return "DOGA Jev response contracts enabled."
+            return "DOGA response contracts enabled."
         if setting == "off":
             _state.jev_enabled = False
             _state._last_jev_status = "disabled"
-            return "DOGA Jev response contracts disabled."
+            return "DOGA response contracts disabled."
         return "Usage: /doga jev on|off"
 
     if sub == "memory":
@@ -670,5 +703,5 @@ def register(ctx) -> None:
         "doga",
         handler=_handle_doga,
         description="Control DOGA probabilistic thinking.",
-        args_hint="on|off|status|auto|manual low|medium|high|depth <1-5>|hats on|off|max_recursion <1-5>|show|hide|memory on|off|jev on|off",
+        args_hint="on|off|status|mode jev_api|laya_local|laya_with_jev_fallback|auto|manual low|medium|high|depth <1-5>|hats on|off|max_recursion <1-5>|show|hide|memory on|off|jev on|off",
     )

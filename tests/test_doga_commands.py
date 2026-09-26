@@ -13,6 +13,8 @@ def _reset_state():
     plugin._state.max_recursion = 3
     plugin._state.memory_enabled = True
     plugin._state.jev_enabled = True
+    plugin._state.decision_provider = "jev"
+    plugin._state.jev_fallback = False
     plugin._state._last_jev_status = "enabled"
 
 
@@ -196,6 +198,54 @@ def test_jev_on_and_off(monkeypatch):
     assert plugin._state.jev_enabled is False
 
 
+def test_three_modes_switch_atomically_and_report_effective_choice(monkeypatch):
+    monkeypatch.setattr(plugin._state, "decision_provider", "jev")
+    monkeypatch.setattr(plugin._state, "jev_fallback", False)
+    for mode, provider, fallback in (
+        ("laya_with_jev_fallback", "laya", True),
+        ("jev_api", "jev", False),
+        ("laya_local", "laya", False),
+    ):
+        assert mode in plugin._handle_doga(f"mode {mode}")
+        assert (plugin._state.decision_provider, plugin._state.jev_fallback) == (provider, fallback)
+        assert mode in plugin._handle_doga("status")
+        assert mode == plugin._state.to_dict()["decision_mode"]
+
+
+def test_legacy_provider_and_fallback_do_not_leave_hidden_remote_route(monkeypatch):
+    monkeypatch.setattr(plugin._state, "decision_provider", "laya")
+    monkeypatch.setattr(plugin._state, "jev_fallback", True)
+    plugin._handle_doga("provider jev")
+    assert plugin._state.decision_mode == "jev_api"
+    assert "only available with Laya" in plugin._handle_doga("fallback on")
+    assert plugin._state.jev_fallback is False
+    plugin._handle_doga("provider laya")
+    assert plugin._state.decision_mode == "laya_local"
+
+
+def test_mode_startup_environment_wins_over_legacy_settings(monkeypatch):
+    monkeypatch.setenv("DOGA_DECISION_PROVIDER", "jev")
+    monkeypatch.setenv("DOGA_LAYA_JEV_FALLBACK", "0")
+    monkeypatch.setenv("DOGA_DECISION_MODE", "laya_with_jev_fallback")
+    state = plugin._PluginState()
+    assert state.decision_provider == "laya"
+    assert state.jev_fallback is True
+    assert state.decision_mode == "laya_with_jev_fallback"
+
+
+def test_invalid_mode_startup_fails_closed(monkeypatch):
+    monkeypatch.setenv("DOGA_DECISION_MODE", "unknown")
+    assert plugin._PluginState().decision_provider == "unknown"
+    assert "invalid" in plugin._PluginState().decision_mode
+
+
+def test_invalid_mode_command_preserves_state(monkeypatch):
+    monkeypatch.setattr(plugin._state, "decision_provider", "jev")
+    monkeypatch.setattr(plugin._state, "jev_fallback", False)
+    assert "Usage" in plugin._handle_doga("mode unavailable")
+    assert plugin._state.decision_mode == "jev_api"
+
+
 def test_status_includes_selected_decision_provider():
     result = plugin._handle_doga("status")
-    assert result is not None and "Response contracts: enabled (provider: jev" in result
+    assert result is not None and "Response contracts: enabled (mode: jev_api" in result

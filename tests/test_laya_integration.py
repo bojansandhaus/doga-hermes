@@ -135,6 +135,40 @@ def test_healthy_laya_does_not_use_remote_even_with_fallback_enabled():
     assert result["answers"] == _answers()["answers"]
 
 
+def test_fallback_logs_local_error_category_without_request(caplog):
+    with patch.object(response_contract, "_request_laya", side_effect=RuntimeError("private request text")), \
+         patch.object(response_contract, "_request_jev", return_value=_answers()):
+        response_contract.evaluate_contract("private request text", provider="laya", fallback_to_jev=True)
+    assert "RuntimeError" in caplog.text
+    assert "private request text" not in caplog.text
+
+
+def test_repeated_local_failures_stop_remote_fallback(monkeypatch):
+    monkeypatch.setattr(response_contract, "_laya_failure_count", 0, raising=False)
+    with patch.object(response_contract, "_request_laya", side_effect=RuntimeError("offline")), \
+         patch.object(response_contract, "_request_jev", return_value=_answers()) as remote:
+        for _ in range(3):
+            assert response_contract.evaluate_contract("sample", provider="laya", fallback_to_jev=True)["_doga_provider"] == "jev_fallback"
+        with pytest.raises(RuntimeError, match="offline"):
+            response_contract.evaluate_contract("sample", provider="laya", fallback_to_jev=True)
+    assert remote.call_count == 3
+
+
+def test_healthy_local_call_resets_failure_breaker(monkeypatch):
+    monkeypatch.setattr(response_contract, "_laya_failure_count", 3, raising=False)
+    with patch.object(response_contract, "_request_laya", return_value=_answers()), \
+         patch.object(response_contract, "_request_jev", side_effect=AssertionError("remote call")):
+        response_contract.evaluate_contract("sample", provider="laya", fallback_to_jev=True)
+    assert response_contract._laya_failure_count == 0
+
+
+def test_local_only_success_resets_failure_breaker(monkeypatch):
+    monkeypatch.setattr(response_contract, "_laya_failure_count", 3, raising=False)
+    with patch.object(response_contract, "_request_laya", return_value=_answers()):
+        response_contract.evaluate_contract("sample", provider="laya")
+    assert response_contract._laya_failure_count == 0
+
+
 def test_remote_failure_after_local_failure_leaves_standard_guidance(monkeypatch):
     monkeypatch.setattr(plugin._state, "decision_provider", "laya")
     monkeypatch.setattr(plugin._state, "jev_fallback", True)

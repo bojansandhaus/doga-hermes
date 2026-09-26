@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 import urllib.error
@@ -13,7 +14,11 @@ MODEL = "jev-latest"
 OPENROUTER_API_URL = "https://openrouter.ai/api/alpha/decisions"
 OPENROUTER_MODEL = "typesafe/jev-1.13"
 LAYA_MODEL = "convaiinnovations/laya"
+logger = logging.getLogger(__name__)
 _laya_lock = threading.RLock()
+_laya_failure_lock = threading.Lock()
+_laya_failure_count = 0
+_LAYA_FALLBACK_FAILURE_LIMIT = 3
 _laya_agent: Any = None
 QUESTIONS = {
     "goal": {"type": "choice", "instructions": "What is the user's primary desired outcome?", "criteria": {"information": "Factual answer, analysis, or explanation.", "understanding": "Feel heard, validated, or understood.", "action": "A decision, recommendation, or next step."}},
@@ -130,14 +135,29 @@ def evaluate_contract(
         raise ValueError("DOGA decision provider must be jev or laya")
     state = {"user_request": user_message}
     if provider == "laya" and fallback_to_jev and evaluator is None:
+        global _laya_failure_count
         try:
-            return _request_laya(state=state, questions=QUESTIONS)
-        except Exception:
+            local = _request_laya(state=state, questions=QUESTIONS)
+        except Exception as exc:
+            logger.warning("DOGA local Laya failed (%s); considering Jev fallback", type(exc).__name__)
+            with _laya_failure_lock:
+                _laya_failure_count += 1
+                allow_fallback = _laya_failure_count <= _LAYA_FALLBACK_FAILURE_LIMIT
+            if not allow_fallback:
+                logger.warning("DOGA Jev fallback suppressed after repeated local failures")
+                raise
             remote = _request_jev(state=state, questions=QUESTIONS)
             return {**remote, "_doga_provider": "jev_fallback"}
+        with _laya_failure_lock:
+            _laya_failure_count = 0
+        return local
     if evaluator is None:
         evaluator = _request_laya if provider == "laya" else _request_jev
-    return evaluator(state=state, questions=QUESTIONS)
+    result = evaluator(state=state, questions=QUESTIONS)
+    if provider == "laya" and evaluator is _request_laya:
+        with _laya_failure_lock:
+            _laya_failure_count = 0
+    return result
 
 
 def build_contract(response: dict[str, Any]) -> dict[str, Any]:
