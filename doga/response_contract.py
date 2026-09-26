@@ -1,8 +1,9 @@
-"""Jev-backed request classification and DOGA response contracts."""
+"""Jev or local Laya request classification and DOGA response contracts."""
 from __future__ import annotations
 
 import json
 import os
+import threading
 import urllib.error
 import urllib.request
 from typing import Any, Callable
@@ -11,6 +12,9 @@ API_URL = "https://api.typesafe.ai/v1/systemone"
 MODEL = "jev-latest"
 OPENROUTER_API_URL = "https://openrouter.ai/api/alpha/decisions"
 OPENROUTER_MODEL = "typesafe/jev-1.13"
+LAYA_MODEL = "convaiinnovations/laya"
+_laya_lock = threading.RLock()
+_laya_agent: Any = None
 QUESTIONS = {
     "goal": {"type": "choice", "instructions": "What is the user's primary desired outcome?", "criteria": {"information": "Factual answer, analysis, or explanation.", "understanding": "Feel heard, validated, or understood.", "action": "A decision, recommendation, or next step."}},
     "mode": {"type": "choice", "instructions": "What response mode best serves the request?", "criteria": {"answer": "Give the requested direct answer or information.", "explain": "Explain concepts or implications without deciding for the user.", "recommend": "Make a recommendation or propose a concrete next action.", "clarify": "A missing fact materially changes the answer; ask one focused question."}},
@@ -88,9 +92,52 @@ def _request_jev(state: dict[str, Any], questions: dict[str, Any]) -> dict[str, 
     raise RuntimeError("Set OPENROUTER_API_KEY or TYPESAFE_API_KEY to enable Jev")
 
 
-def evaluate_contract(user_message: str, evaluator: Callable[..., dict[str, Any]] = _request_jev) -> dict[str, Any]:
+def _request_laya(state: dict[str, Any], questions: dict[str, Any]) -> dict[str, Any]:
+    """Use one cached local model; never fall back to a network provider."""
+    global _laya_agent
+    try:
+        import laya
+    except ImportError as exc:
+        raise RuntimeError("Local Laya is unavailable; install doga-hermes[laya] in Hermes' Python environment") from exc
+    with _laya_lock:
+        if _laya_agent is None:
+            _laya_agent = laya.load(LAYA_MODEL)
+        result = _laya_agent.predict(state, questions)
+    if not isinstance(result, dict) or not isinstance(result.get("answers"), dict):
+        raise RuntimeError("invalid local Laya response")
+    answers = result["answers"]
+    for name, question in questions.items():
+        answer = answers.get(name)
+        if not isinstance(answer, dict):
+            raise RuntimeError("invalid local Laya response: missing typed answer")
+        if question["type"] == "choice" and answer.get("choice") not in question["criteria"]:
+            raise RuntimeError("invalid local Laya response: unknown choice")
+        if question["type"] == "noul":
+            score = answer.get("noul")
+            if isinstance(score, bool) or not isinstance(score, (int, float)) or not 0 <= score <= 1:
+                raise RuntimeError("invalid local Laya response: invalid probability")
+    return result
+
+
+def evaluate_contract(
+    user_message: str,
+    evaluator: Callable[..., dict[str, Any]] | None = None,
+    provider: str = "jev",
+    fallback_to_jev: bool = False,
+) -> dict[str, Any]:
     """Ask independent typed judgments in one call over the request only."""
-    return evaluator(state={"user_request": user_message}, questions=QUESTIONS)
+    if provider not in {"jev", "laya"}:
+        raise ValueError("DOGA decision provider must be jev or laya")
+    state = {"user_request": user_message}
+    if provider == "laya" and fallback_to_jev and evaluator is None:
+        try:
+            return _request_laya(state=state, questions=QUESTIONS)
+        except Exception:
+            remote = _request_jev(state=state, questions=QUESTIONS)
+            return {**remote, "_doga_provider": "jev_fallback"}
+    if evaluator is None:
+        evaluator = _request_laya if provider == "laya" else _request_jev
+    return evaluator(state=state, questions=QUESTIONS)
 
 
 def build_contract(response: dict[str, Any]) -> dict[str, Any]:

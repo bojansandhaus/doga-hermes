@@ -196,6 +196,6 @@ def test_jev_on_and_off(monkeypatch):
     assert plugin._state.jev_enabled is False
 
 
-def test_status_includes_jev():
+def test_status_includes_selected_decision_provider():
     result = plugin._handle_doga("status")
-    assert result is not None and "Jev: enabled" in result
+    assert result is not None and "Response contracts: enabled (provider: jev" in result

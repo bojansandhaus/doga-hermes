@@ -1,4 +1,4 @@
-# DOGA with Jev for Hermes
+# DOGA with Jev or Laya for Hermes
 
 [![MIT License](https://img.shields.io/github/license/bojansandhaus/doga-hermes)](https://github.com/bojansandhaus/doga-hermes/blob/main/LICENSE)
 [![Python 3.10 | 3.11 | 3.12](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://github.com/bojansandhaus/doga-hermes)
@@ -8,7 +8,7 @@
 
 **Probabilistic, goal-aware thinking layer for Hermes Agent.**
 
-Built by [@0z1-ghb](https://github.com/0z1-ghb). This independent fork makes an adjustment to DOGA by adding Jev response contracts and OpenRouter primary routing with direct TypeSafe fallback.
+Built by [@0z1-ghb](https://github.com/0z1-ghb). This independent fork adds typed response contracts using Jev (OpenRouter primary, direct TypeSafe fallback) or optional local Laya.
 
 DOGA (Doğa, Turkish for “nature”) adds scenario simulation, Monte Carlo reasoning, and goal detection to Hermes responses. It remains a plugin and does not modify Hermes core.
 
@@ -17,7 +17,7 @@ DOGA (Doğa, Turkish for “nature”) adds scenario simulation, Monte Carlo rea
 ## Features
 
 - **Goal Detection**  Identifies whether the user needs Information, Understanding, or Action before responding
-- **Jev Response Contract**  Enabled by default. Jev classifies the user's goal, response mode, stakes, need for clarification, and scenario analysis. DOGA turns that assessment into answer requirements for the main model. OpenRouter is primary, with direct TypeSafe as fallback.
+- **Jev or Local Laya Response Contract**  Enabled by default with Jev. Choose local Laya when you want request classification to run on your machine. Either model classifies the user's goal, response mode, stakes, need for clarification, and scenario analysis. DOGA turns that assessment into answer requirements for the main model. Jev uses OpenRouter first with direct TypeSafe fallback; Laya makes no provider API call.
 - **Scenario Generation**  Prompts the LLM to enumerate and weigh multiple interpretations
 - **Monte Carlo Simulation**  Pure Python engine (10,000 to 50,000 iterations) for quantitative probability analysis, using 0 LLM tokens
 - **Thinking Panel**  `<world_model>` reasoning blocks are extracted and displayed as a structured `[DOGA: Thinking Process]` panel before the final response
@@ -46,11 +46,24 @@ pip install doga-hermes[memory]
 
 No configuration changes are needed. DOGA detects Mnemosyne at runtime.
 
-### Jev setup
+### Jev or Laya setup
 
 Jev response contracts are on by default. For live Jev assessments, make `OPENROUTER_API_KEY` available to the Hermes process. To enable TypeSafe failover, also provide `TYPESAFE_API_KEY`. DOGA reads keys from the process environment, not DOGA configuration or model prompts. Without either key, the Jev request cannot be evaluated and DOGA continues with its standard guidance.
 
 DOGA sends the user's request to Jev through OpenRouter first, using model `typesafe/jev-1.13` at `https://openrouter.ai/api/alpha/decisions`. If that key is missing or the request fails, DOGA tries TypeSafe directly, using model `jev-latest` at `https://api.typesafe.ai/v1/systemone`. If only `TYPESAFE_API_KEY` is set, DOGA uses the direct TypeSafe route. If both calls fail, DOGA continues with its standard guidance. `JEV_PROVIDER_MODE` configures the separate `jev-decisions` Hermes plugin and does not control DOGA's provider route.
+
+For local Laya, install the optional extra **in the Python environment running Hermes**, then select it:
+
+```bash
+# Run from this fork's checkout:
+uv pip install --python /path/to/hermes-python '.[laya]'
+# Set DOGA_DECISION_PROVIDER=laya in the Hermes process environment and restart Hermes,
+# or choose it for the current running process with /doga provider laya.
+```
+
+If you copied the plugin directory instead of installing the Python package, install `laya>=0.3.20,<1` into Hermes' Python environment. The default model is `convaiinnovations/laya`, loaded once and reused for requests. Its first load may download model weights from Hugging Face; cache the checkpoint before using `HF_HUB_OFFLINE=1` for offline operation. A local smoke test emitted a Laya warning about invalid saved choice temperatures that it clamped; treat affected confidence values as uncalibrated. Without fallback, a Laya error keeps ordinary DOGA guidance and never sends the request to Jev. No Jev keys are needed for Laya alone. The selected provider is per Hermes process; `/doga provider laya` is not persisted across restarts. Set `DOGA_DECISION_PROVIDER=laya` in the environment for a persistent choice. An invalid provider name fails closed to ordinary guidance, not remote Jev.
+
+If you explicitly want remote Jev as a fallback when local Laya fails, run `/doga fallback on` or start Hermes with `DOGA_LAYA_JEV_FALLBACK=1`. Set `OPENROUTER_API_KEY` and `TYPESAFE_API_KEY` in Hermes' secret environment. Only a local error triggers a remote request: OpenRouter is tried first, then direct TypeSafe if OpenRouter fails. The user request is sent to those providers during fallback, so leave fallback off if local-only handling is required. `/doga fallback off` restores local-only behavior for the running process.
 
 Enable the DOGA plugin in `~/.hermes/config.yaml`:
 
@@ -86,13 +99,17 @@ doga:
 | `/doga hide` | Hide simulation panel |
 | `/doga memory on` | Enable goal memory (requires Mnemosyne) |
 | `/doga memory off` | Disable goal memory |
-| `/doga jev off` | Disable Jev response contracts, which are on by default |
-| `/doga jev on` | Re-enable Jev response contracts after turning them off |
+| `/doga jev off` | Disable response contracts for the selected classifier (legacy command name) |
+| `/doga jev on` | Re-enable response contracts for the selected classifier |
+| `/doga provider laya` | Select local Laya for response contracts for this process |
+| `/doga provider jev` | Select Jev (OpenRouter, then TypeSafe) again |
+| `/doga fallback on` | If local Laya fails, use Jev through OpenRouter then TypeSafe |
+| `/doga fallback off` | Keep Laya errors local and use ordinary DOGA guidance |
 | `/doga max_recursion 3` | Example: set maximum `reason_deeper` depth from 1 to 5 |
 
-### Jev Response Contract
+### Jev or Laya Response Contract
 
-Jev is a typed decision model used here as a request classifier. It is enabled by default. For each user request, DOGA asks Jev for one structured assessment of five facets:
+Jev and Laya are typed decision models used here as alternative request classifiers. Jev is the default; select Laya for local inference. For each user request, DOGA asks the selected model for one structured assessment of five facets:
 
 1. **Goal:** information, understanding, or action.
 2. **Response mode:** answer, explain, recommend, or clarify.
@@ -100,9 +117,11 @@ Jev is a typed decision model used here as a request classifier. It is enabled b
 4. **Clarification:** whether a missing fact materially changes the useful answer.
 5. **Scenario need:** none, compare options, or analyze explicit uncertainty.
 
-DOGA maps those judgments into a compact response contract. An action request can require a recommendation and next step, and high stakes add material risks and uncertainty. When Jev selects clarify and its ambiguity score is at least 0.7, DOGA asks one focused question. When the ambiguity score is at least 0.7 but Jev selects another response mode, DOGA preserves that mode while requiring a conditional answer that states material assumptions and what missing information could change the answer. The contract is added to DOGA's pre-model guidance; the main Hermes model still reasons through the task and writes the answer. Jev does not write the final response, and its judgments are guidance rather than verified facts or calibrated probabilities.
+DOGA maps those judgments into a compact response contract. An action request can require a recommendation and next step, and high stakes add material risks and uncertainty. When the selected model chooses clarify and its ambiguity score is at least 0.7, DOGA asks one focused question. When the ambiguity score is at least 0.7 but it selects another response mode, DOGA preserves that mode while requiring a conditional answer that states material assumptions and what missing information could change the answer. The contract is added to DOGA's pre-model guidance; the main Hermes model still reasons through the task and writes the answer. Neither Jev nor Laya writes the final response. Laya's scores have not been calibrated on DOGA's five questions, so do not assume its classifications or the 0.7 threshold perform like Jev's; evaluate against labeled examples before relying on it for consequential decisions.
 
-The primary request goes to OpenRouter. TypeSafe is tried only when OpenRouter is unavailable or its request fails, or when no OpenRouter key is configured. The same user request may therefore be sent to TypeSafe during failover. Use this feature only when sending that request to those providers is acceptable; provider usage may incur charges. If both routes fail, DOGA silently keeps its ordinary goal and scenario guidance rather than blocking the answer.
+With Jev selected, the classification request goes to OpenRouter. TypeSafe is tried only when OpenRouter is unavailable or its request fails, or when no OpenRouter key is configured. The same user request may therefore be sent to TypeSafe during failover. Use this feature only when sending that request to those providers is acceptable; provider usage may incur charges. If both routes fail, DOGA silently keeps its ordinary goal and scenario guidance rather than blocking the answer.
+
+That routing applies when Jev is selected or when Laya fails with the explicit fallback enabled. In Laya mode with fallback off, classification stays local after the checkpoint is cached; a missing dependency, failed model load, or invalid result produces ordinary DOGA guidance. With fallback on, any such local failure sends the request to Jev, trying OpenRouter and then TypeSafe. The main Hermes model and any other enabled tools or plugins may still make their own network requests. The old `/doga jev on|off` command remains for compatibility and toggles response contracts for either selected classifier.
 
 ### Simulate Tool
 
@@ -143,7 +162,7 @@ DOGA uses three Hermes plugin hooks:
 
 | Hook | Purpose |
 |------|---------|
-| `pre_llm_call` | Inject goal detection, scenario guidance, and the optional Jev response contract |
+| `pre_llm_call` | Inject goal detection, scenario guidance, and the optional Jev or Laya response contract |
 | `transform_llm_output` | Extract `<world_model>` blocks, format as thinking panel |
 | `post_tool_call` | Log tool usage; track `reason_deeper` recursion depth and stack |
 
@@ -153,9 +172,9 @@ No Hermes core files are modified. DOGA is a pure plugin.
 
 ## About
 
-This repository is an independent fork and adjustment of [DOGA by @0z1-ghb](https://github.com/0z1-ghb/doga-hermes), released under the upstream MIT license. It retains DOGA's original probabilistic reasoning, simulation, and Hermes plugin behavior, and adds a Jev response contract with OpenRouter primary and direct TypeSafe fallback. Jev classifies the user's request; the main Hermes model remains responsible for reasoning through it and writing the answer.
+This repository is an independent fork and adjustment of [DOGA by @0z1-ghb](https://github.com/0z1-ghb/doga-hermes), released under the upstream MIT license. It retains DOGA's original probabilistic reasoning, simulation, and Hermes plugin behavior, and adds response contracts through Jev (OpenRouter primary, direct TypeSafe fallback) or optional local Laya. The selected model classifies the user's request; the main Hermes model remains responsible for reasoning through it and writing the answer.
 
-Original DOGA was built by [@0z1-ghb](https://github.com/0z1-ghb). This community maintained fork adds Jev response contracts and is not an official Hermes, TypeSafe, or OpenRouter project.
+Original DOGA was built by [@0z1-ghb](https://github.com/0z1-ghb). This community maintained fork adds Jev and Laya response contracts and is not an official Hermes, TypeSafe, OpenRouter, or Laya project.
 
 ---
 

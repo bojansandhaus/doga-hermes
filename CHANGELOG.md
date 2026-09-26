@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.2.0 (2026-09-26)
+
+### Added
+- Optional local Laya classifier for the existing five-facet DOGA response contract. Select it for the current process with `/doga provider laya`, or start Hermes with `DOGA_DECISION_PROVIDER=laya` for a persistent choice. Jev remains the default.
+- Explicit opt-in Jev fallback when local Laya errors. Use `/doga fallback on` for this process or `DOGA_LAYA_JEV_FALLBACK=1` at process startup. Jev then tries OpenRouter first and direct TypeSafe if necessary. With fallback off, a local error never sends the request remotely.
+- `laya` optional Python dependency group. The model loads once per process and its predictions are serialized to prevent concurrent model calls.
+
+### Changed
+- The selected classifier now supplies typed judgments to the same contract builder and ambiguity handling. `/doga jev on|off` continues to toggle response contracts for backward compatibility, including when Laya is selected.
+- Healthy local Laya never calls Jev. If Laya errors, DOGA either tries Jev when explicitly opted in or retains ordinary guidance without a typed contract. A failed Jev fallback also retains ordinary guidance.
+
+### Limitations
+- The first local load can download model weights from Hugging Face. Cache them before requiring offline operation. The main Hermes model and other plugins have separate network behavior.
+- Laya's classification accuracy and its ambiguity probability on DOGA's questions are not calibrated against Jev; the shared 0.7 threshold is a starting behavior, not a validated decision threshold.
+- A local checkpoint smoke test emitted a Laya runtime warning about invalid saved choice temperatures; Laya clamped them. Treat affected confidence values as uncalibrated until the checkpoint is recalibrated.
+
+### Verification
+- Full local suite: 144 passed. Wheel and source distribution built.
+- With the Laya checkpoint cached and `HF_HUB_OFFLINE=1`, a local five-facet prediction and a Hermes `pre_llm_call` hook both returned a contract without invoking Jev's provider path.
+
+---
+
 ## v1.1.1 (2026-09-25)
 
 ### Fixed
